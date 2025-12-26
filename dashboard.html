@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleet Architecture | Executive Dashboard</title>
+    
+    <!-- 1. EXTERNAL DEPENDENCIES -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- 2. TAILWIND CONFIGURATION -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        base: '#f8fafc',
+                        surface: '#ffffff',
+                        primary: '#1e293b',
+                        accent: '#2563eb',
+                        secondary: '#64748b',
+                        border: '#e2e8f0',
+                    },
+                    fontFamily: {
+                        sans: ['"Inter"', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- 3. GLOBAL STYLES & UI REFINEMENTS -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 280px; 
+            max-height: 350px;
+        }
+
+        .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(2px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .nav-item.active {
+            color: #ffffff !important;
+            background-color: #2563eb !important; 
+            font-weight: 600;
+            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.2);
+        }
+        .nav-item.active .nav-icon {
+            color: #ffffff !important;
+            opacity: 1 !important;
+        }
+
+        .status-pill {
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .modal-backdrop {
+            background-color: rgba(15, 23, 42, 0.15);
+            backdrop-filter: blur(8px);
+        }
+
+        input, select, textarea {
+            outline: none;
+            transition: all 0.2s;
+            appearance: none;
+        }
+        
+        .notif-scroll::-webkit-scrollbar { width: 4px; }
+        .notif-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        .kpi-label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.075em;
+            color: #94a3b8;
+            text-transform: uppercase;
+        }
+        
+        .kpi-main {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.01em;
+        }
+
+        .card-minimal {
+            background: white;
+            border: 1px solid #f1f5f9;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .minimal-select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right center;
+            background-size: 0.75rem;
+            padding-right: 1.25rem;
+            border: none;
+            background-color: transparent;
+            cursor: pointer;
+        }
+
+        .form-label {
+            font-size: 0.6rem;
+            font-weight: 800;
+            letter-spacing: 0.1em;
+            color: #94a3b8;
+            text-transform: uppercase;
+            margin-bottom: 0.25rem;
+            display: block;
+        }
+        .status-pulse {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 8px;
+            height: 8px;
+            background-color: #ef4444; /* red-500 */
+            border-radius: 50%;
+            border: 2px solid #ffffff;
+            z-index: 10;
+        }
+
+        .status-pulse::after {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            border: 2px solid #ef4444;
+            animation: custom-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes custom-pulse {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(3.5);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <!-- 4. GLOBAL HEADER -->
+    <header class="bg-surface border-b border-border px-8 py-3 flex justify-between items-center z-[70] shrink-0 relative">
+        <div class="flex items-center space-x-4 w-1/4">
+            <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-sm">F</div>
+            <h1 class="text-[10px] font-black tracking-[0.2em] text-slate-800 uppercase hidden lg:block text-nowrap">Fleet Core <span class="text-slate-300 font-light ml-1">4.0</span></h1>
+        </div>
+
+        <div class="flex-1 flex justify-center max-w-lg">
+            <div class="relative w-full">
+                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔍</span>
+                <input type="text" 
+                       class="w-full bg-slate-50 border border-slate-100 rounded-xl py-2 pl-11 pr-4 text-xs font-medium placeholder:text-slate-400 focus:bg-white focus:ring-1 focus:ring-blue-100 transition-all" 
+                       placeholder="Search fleet, vehicles, loads...">
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end space-x-6 w-1/4">
+            <div class="relative">
+                <button onclick="toggleNotifications(event)" class="relative p-1.5 text-lg text-slate-400 hover:text-accent transition-colors">
+                    🔔 <span class="status-pulse"></span>
+                </button>
+				<!-- NOTIFICATION DROPDOWN -->
+                <div id="notif-dropdown" class="hidden absolute right-0 mt-4 w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[100] overflow-hidden fade-in">
+                    <div class="px-5 py-4 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
+                        <span class="text-[10px] font-black text-slate-800 uppercase tracking-widest">Operational Alerts</span>
+                        <span class="text-[9px] text-accent font-bold cursor-pointer hover:underline">Mark all read</span>
+                    </div>
+                    <div class="max-h-96 overflow-y-auto notif-scroll" id="notif-content"></div>
+                    <div class="p-3 bg-slate-50/30 border-t border-slate-50 text-center">
+                        <a href="javascript:void(0)" class="text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-accent">View Analysis History</a>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3 border-l border-border pl-6">
+                <div class="hidden lg:flex flex-col items-end">
+                    <span class="text-[10px] font-bold text-slate-800 leading-none">John Doe</span>
+                    <span class="text-[8px] text-slate-400 uppercase mt-1 font-bold tracking-wider">Fleet Owner</span>
+                </div>
+                <div class="w-8 h-8 rounded-full bg-slate-100 border border-border flex items-center justify-center text-[10px] font-bold text-slate-600">JD</div>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- 5. SIDEBAR NAVIGATION -->
+        <nav class="w-60 bg-surface border-r border-border overflow-y-auto shrink-0 hidden md:flex flex-col py-6">
+            <div class="px-6 mb-8">
+                <a href="javascript:void(0)" onclick="openAddVehicleModal()" class="w-full flex items-center justify-center space-x-2 bg-accent text-white py-2.5 rounded-xl font-bold text-xs shadow-md hover:bg-blue-700 transition-all">
+                    <span>＋</span>
+                    <span>Add New Vehicle</span>
+                </a>
+            </div>
+            <div class="px-4">
+                <p class="text-[9px] font-bold text-slate-300 uppercase tracking-[0.25em] mb-4 px-4">Main Menu</p>
+                <ul class="space-y-1">
+                    <li>
+                        <a href="javascript:void(0)" id="nav-overview" onclick="loadSection('overview')" class="nav-item active w-full flex items-center px-4 py-2 rounded-xl text-xs transition-all group text-slate-500 hover:text-accent hover:bg-slate-50">
+                            <span class="nav-icon mr-3 text-base">⊞</span>
+                            <span class="font-medium">Overview</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="javascript:void(0)" id="nav-vehicles" onclick="toggleMenu('vehicles')" class="nav-item w-full flex items-center justify-between px-4 py-2 rounded-xl text-xs transition-all group text-slate-500 hover:text-accent hover:bg-slate-50">
+                            <div class="flex items-center">
+                                <span class="nav-icon mr-3 text-base opacity-40">🚛</span>
+                                <span class="font-medium">Vehicles</span>
+                            </div>
+                            <span id="arrow-vehicles" class="text-[8px] opacity-40 transition-transform">▼</span>
+                        </a>
+                        <ul id="menu-vehicles" class="hidden mt-0.5 ml-10 space-y-0.5 border-l border-slate-100">
+                            <li><a href="javascript:void(0)" id="nav-all-vehicles" onclick="loadSection('all-vehicles')" class="w-full block text-left py-1.5 px-4 rounded-md text-[10px] font-medium transition-all text-slate-400 hover:text-accent">All Vehicles</a></li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="javascript:void(0)" id="nav-drivers" onclick="loadSection('drivers')" class="nav-item w-full flex items-center px-4 py-2 rounded-xl text-xs transition-all group text-slate-500 hover:text-accent hover:bg-slate-50">
+                            <span class="nav-icon mr-3 text-base opacity-40">👤</span>
+                            <span class="font-medium">Drivers</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="javascript:void(0)" id="nav-load-tracking" onclick="loadSection('load-tracking')" class="nav-item w-full flex items-center px-4 py-2 rounded-xl text-xs transition-all group text-slate-500 hover:text-accent hover:bg-slate-50">
+                            <span class="nav-icon mr-3 text-base opacity-40">📦</span>
+                            <span class="font-medium">Load Tracking</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="javascript:void(0)" id="nav-account" onclick="toggleMenu('account')" class="nav-item w-full flex items-center justify-between px-4 py-2 rounded-xl text-xs transition-all group text-slate-500 hover:text-accent hover:bg-slate-50">
+                            <div class="flex items-center">
+                                <span class="nav-icon mr-3 text-base opacity-40">⚙️</span>
+                                <span class="font-medium">Account</span>
+                            </div>
+                            <span id="arrow-account" class="text-[8px] opacity-40 transition-transform">▼</span>
+                        </a>
+                        <ul id="menu-account" class="hidden mt-0.5 ml-10 space-y-0.5 border-l border-slate-100">
+                            <li><a href="javascript:void(0)" id="nav-user-management" onclick="loadSection('user-management')" class="w-full block text-left py-1.5 px-4 rounded-md text-[10px] font-medium transition-all text-slate-400 hover:text-accent">User Managements</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+
+        <!-- 6. MAIN WORKSPACE -->
+        <main class="flex-1 overflow-y-auto bg-base scroll-smooth p-8 lg:p-10" id="main-content">
+            <!-- Content dynamically generated -->
+        </main>
+    </div>
+
+    <!-- 7. MODALS -->
+	<div id="vehicle-detail-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 modal-backdrop">
+        <div class="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full p-10 fade-in border border-border">
+            <div class="flex justify-between items-start mb-8">
+                <div>
+                    <h3 class="text-2xl font-black text-slate-800 tracking-tight" id="modal-title">Vehicle Detail: - 1234</h3>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Diagnostic & Fleet Asset Information</p>
+                </div>
+                <button onclick="closeVehicleDetailModal()" class="text-slate-300 hover:text-slate-600 text-xl">✕</button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                <div class="space-y-6">
+                    <div class="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                        <h4 class="text-[10px] font-black text-accent uppercase tracking-widest mb-4">Specifications</h4>
+                        <div class="space-y-3">
+                            <div class="flex justify-between border-b border-slate-200 pb-2"><span class="text-[10px] font-bold text-slate-400">Make / Model</span><span class="text-[11px] font-black text-slate-700" id="m-model">Volvo FH16</span></div>
+                            <div class="flex justify-between border-b border-slate-200 pb-2"><span class="text-[10px] font-bold text-slate-400">VIN</span><span class="text-[11px] font-black text-slate-700 uppercase" id="m-vin">1HV...092</span></div>
+                            <div class="flex justify-between"><span class="text-[10px] font-bold text-slate-400">Assigned Driver</span><span class="text-[11px] font-black text-slate-700" id="m-driver">Sarah Jenkins</span></div>
+                        </div>
+                    </div>
+                    <div class="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                        <h4 class="text-[10px] font-black text-accent uppercase tracking-widest mb-4">Maintenance Status</h4>
+                        <div class="space-y-3">
+                            <div class="flex justify-between items-center"><span class="text-[10px] font-bold text-slate-400">Engine Health</span><span class="text-[10px] font-black px-2 py-1 rounded-lg" id="m-health">GOOD</span></div>
+                            <div class="flex justify-between"><span class="text-[10px] font-bold text-slate-400">Next Inspection</span><span class="text-[11px] font-black" id="m-inspection">Jan 12, 2026</span></div>
+                            <div class="flex justify-between"><span class="text-[10px] font-bold text-slate-400">Tire Rotation</span><span class="text-[11px] font-black" id="m-tire">In 4,200 km</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-4">
+                    <div class="bg-slate-50 p-6 rounded-3xl border border-slate-100 flex-1">
+                        <h4 class="text-[10px] font-black text-accent uppercase tracking-widest mb-4">Fuel Efficiency</h4>
+                        <div class="h-44"><canvas id="fuelChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-4">
+                <button onclick="closeVehicleDetailModal()" class="flex-1 bg-slate-100 text-slate-500 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all">Close</button>
+                <button onclick="alert('Maintenance Work Order Created')" class="flex-[1.5] bg-accent text-white py-4 rounded-2xl font-black text-xs shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all uppercase tracking-widest">Scheduled Maintenance</button>
+            </div>
+        </div>
+    </div>
+    <!-- CREATE NEW LOAD MODAL (Assignment-Focused UX) -->
+    <div id="create-load-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 modal-backdrop">
+        <div class="bg-white rounded-[2rem] shadow-2xl max-w-2xl w-full p-10 fade-in border border-border">
+            <div class="flex justify-between items-start mb-8">
+                <div>
+                    <h3 class="text-2xl font-black text-slate-800 tracking-tight">Create & Assign Load</h3>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Configure asset capacity and workforce deployment</p>
+                </div>
+                <button onclick="closeCreateLoadModal()" class="text-slate-300 hover:text-slate-600 transition-colors text-xl font-bold">✕</button>
+            </div>
+            
+            <form id="new-load-form" class="space-y-6">
+                <!-- Group 1: Route Dynamics -->
+                <div class="bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
+                    <h4 class="text-[10px] font-black text-accent uppercase tracking-[0.2em] mb-4">1. Route Dynamics</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="form-label">Origin City / PIN</label>
+                            <input type="text" placeholder="e.g. 400001 (Mumbai)" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold focus:ring-2 focus:ring-blue-100 transition-all">
+                        </div>
+                        <div>
+                            <label class="form-label">Destination City / PIN</label>
+                            <input type="text" placeholder="e.g. 560001 (Bangalore)" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold focus:ring-2 focus:ring-blue-100 transition-all">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Group 2: Operational Assignment -->
+                <div class="bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
+                    <h4 class="text-[10px] font-black text-accent uppercase tracking-[0.2em] mb-4">2. Operational Assignment</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="form-label">Driver Name</label>
+                            <input type="text" placeholder="e.g. Sarah Jenkins" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold focus:ring-2 focus:ring-blue-100 transition-all">
+                        </div>
+                        <div>
+                            <label class="form-label">Assigned Vehicle</label>
+                            <select class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-600 minimal-select">
+                                <option>Vehicle NO. 3004 (Maharashtra Express)</option>
+                                <option>Vehicle NO. 1024 (Maharashtra Express)</option>
+                                <option>Vehicle NO. 2051 (Western Prime)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Group 3: Cargo & Budget -->
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label class="form-label">Truck Type</label>
+                        <select class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-600 minimal-select">
+                            <option>Reefer</option>
+                            <option>Dry Van</option>
+                            <option>Flatbed</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Weight (Tons)</label>
+                        <input type="number" placeholder="24" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold">
+                    </div>
+                    <div>
+                        <label class="form-label">Pay Rate ($)</label>
+                        <input type="text" placeholder="1,200.00" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-extrabold text-accent">
+                    </div>
+                </div>
+
+                <div class="flex gap-4 pt-4">
+                    <button type="button" onclick="confirmLoadCreation()" class="flex-1 bg-accent text-white py-4 rounded-2xl font-black text-xs shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all uppercase tracking-widest">Confirm Assignment</button>
+                    <button type="button" onclick="closeCreateLoadModal()" class="px-8 bg-slate-100 text-slate-500 py-4 rounded-2xl font-black text-xs uppercase tracking-widest">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Assign Load Modal -->
+    <div id="assign-load-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 modal-backdrop">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 fade-in border border-border">
+            <div class="flex justify-between items-start mb-8">
+                <div>
+                    <h3 class="text-xl font-black text-slate-800 tracking-tight">Assign Asset to Load</h3>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1" id="modal-load-id">LOAD ID: LD-XXXX</p>
+                </div>
+                <button onclick="closeAssignModal()" class="text-slate-300 hover:text-slate-600 transition-colors text-xl font-bold">✕</button>
+            </div>
+            
+            <div class="bg-slate-50 rounded-2xl p-6 space-y-6 mb-8 border border-slate-100">
+                <div class="grid grid-cols-2 gap-6">
+                    <div><p class="text-[9px] font-bold text-slate-400 uppercase">Route Detail</p><p class="text-xs font-black text-slate-700" id="modal-route">--</p></div>
+                    <div><p class="text-[9px] font-bold text-slate-400 uppercase">Pay Rate</p><p class="text-xs font-black text-accent" id="modal-rate">--</p></div>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <select class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold text-slate-600 minimal-select">
+                    <option>Maharashtra Express - Vehicle 3004</option>
+                    <option>Western Prime - Vehicle 2051</option>
+                </select>
+                <button onclick="confirmAssignment()" class="w-full bg-accent text-white py-4 rounded-2xl font-black text-xs shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all uppercase tracking-widest">Confirm Assignment</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="add-vehicle-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 modal-backdrop">
+        <div class="bg-surface rounded-2xl shadow-2xl max-sm w-full p-8 fade-in border border-border text-center">
+            <h3 class="text-lg font-bold text-primary mb-1">New Fleet Asset</h3>
+            <p class="text-xs text-slate-400 mb-6 italic">Configuration in Progress...</p>
+            <button onclick="closeAddVehicleModal()" class="w-full bg-accent text-white py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest">Return to Dashboard</button>
+        </div>
+    </div>
+
+<!-- Active Detention View All Modal -->
+    <div id="detention-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 modal-backdrop">
+        <div class="bg-white rounded-[2.5rem] shadow-2xl max-w-4xl w-full p-10 fade-in border border-border">
+            <div class="flex justify-between items-center mb-8 px-2">
+                <div>
+                    <h3 class="text-2xl font-black text-slate-800 tracking-tight uppercase">Active Detention Directory</h3>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Global Hub Monitoring & Dwell Escalation</p>
+                </div>
+                <button onclick="closeDetentionModal()" class="text-slate-300 font-bold text-xl hover:text-slate-500">✕</button>
+            </div>
+            <div class="space-y-4 max-h-[60vh] overflow-y-auto pr-2 notif-scroll" id="detention-list"></div>
+            <div class="mt-8 pt-6 border-t border-slate-100 text-right">
+                <button onclick="closeDetentionModal()" class="bg-slate-100 text-slate-500 px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest">Close Directory</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 8. APPLICATION SCRIPT -->
+    <script>
+        const reportData = {
+            vehicles: [
+                { id: '1024', fleet: 'Maharashtra Express', driver: 'Sarah Jenkins', location: 'Chicago', status: 'In Transit', color: 'bg-blue-50 text-blue-600', maintNeed: 'No', make: 'Volvo', model: 'FH16 750', vin: '1HV88A02L91X', engine: 'Good', inspection: 'Feb 15, 2026', tire: 'In 12,000 km', fuelHistory: [7.2, 7.5, 7.1, 7.8, 7.4, 7.6] },
+                { id: '2051', fleet: 'Western Prime', driver: 'Mike Ross', location: 'Denver', status: 'Maintenance', color: 'bg-red-50 text-red-600', maintNeed: 'Critical', make: 'Scania', model: 'R500 V8', vin: '5SN22B99Z11P', engine: 'Critical', inspection: 'Overdue', tire: 'Immediate', fuelHistory: [6.1, 5.8, 5.5, 5.9, 5.7, 5.4] },
+                { id: '3004', fleet: 'Maharashtra Express', driver: 'Elena Rodriguez', location: 'Austin', status: 'Available', color: 'bg-green-50 text-green-600', maintNeed: 'No', make: 'Mercedes-Benz', model: 'Actros 2645', vin: '3MB55C88M00Q', engine: 'Excellent', inspection: 'Mar 10, 2026', tire: 'In 8,500 km', fuelHistory: [8.5, 8.7, 8.2, 8.9, 8.6, 8.8] }
+            ],
+            detentionAlerts: [
+                { id: '3004', fleet: 'MAHARASHTRA EXPRESS', location: 'Austin Depot', dwell: '7h 12m', charge: 350.00, shipper: 'Global Logistics Co.' },
+                { id: '0745', fleet: 'WESTERN PRIME', location: 'Borivali Hub', dwell: '6h 45m', charge: 280.00, shipper: 'Tata Steel Ltd' },
+                { id: '9012', fleet: 'NORTHERN PRIME', location: 'Mumbai Port', dwell: '8h 20m', charge: 410.00, shipper: 'Amazon India' }
+            ],
+            loads: [
+                { id: 'LD-9901', origin: 'Mumbai', destination: 'Bangalore', distance: '980 km', type: 'Reefer', weight: '24 Tons', rate: '$1,200', status: 'Urgent', color: 'bg-red-50 text-red-600' },
+                { id: 'LD-8842', origin: 'Delhi', destination: 'Pune', distance: '1,450 km', type: 'Dry Van', weight: '18 Tons', rate: '$1,850', status: 'Available', color: 'bg-green-50 text-green-600' },
+                { id: 'LD-7712', origin: 'Chennai', destination: 'Hyderabad', distance: '630 km', type: 'Flatbed', weight: '12 Tons', rate: '$850', status: 'Assigned', color: 'bg-blue-50 text-blue-600' },
+                { id: 'LD-6605', origin: 'Kolkata', destination: 'Patna', distance: '580 km', type: 'Tanker', weight: '30 Tons', rate: '$2,100', status: 'Maintenance', color: 'bg-orange-50 text-orange-600' }
+            ],
+			notifications: [
+                { type: 'detention', title: 'Detention Charge Triggered', body: 'Vehicle NO. 3004 active charge: $350.00 at Austin Depot.', icon: '💰' },
+                { type: 'available', title: 'Vehicle Available', body: 'Vehicle NO. 3004 is now Available.', icon: '✅' },
+                { type: 'maint', title: 'Maintenance Required', body: 'Vehicle NO. 2051 needs Critical Engine maintenance.', icon: '🛠️' },
+                { type: 'load', title: 'Loading Status Update', body: 'Load LD-9901 status verified.', icon: '📦' }
+            ]
+        };
+
+        let charts = {};
+        let mainContentElement;
+
+        function init() {
+            mainContentElement = document.getElementById('main-content');
+			renderNotifications();
+            loadSection('overview');
+			
+			window.addEventListener('click', (e) => {
+                const dropdown = document.getElementById('notif-dropdown');
+                if (dropdown && !e.target.closest('#notif-dropdown') && !e.target.closest('button[onclick="toggleNotifications(event)"]')) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+        }
+		
+		function toggleNotifications(event) {
+            event.stopPropagation();
+            document.getElementById('notif-dropdown').classList.toggle('hidden');
+        }
+		
+		function renderNotifications() {
+            const container = document.getElementById('notif-content');
+            container.innerHTML = reportData.notifications.map(n => `
+                <div class="px-5 py-4 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer group">
+                    <div class="flex items-start gap-4">
+                        <div class="w-8 h-8 rounded-lg bg-white shadow-sm border border-slate-100 flex items-center justify-center text-xs shrink-0">${n.icon}</div>
+                        <div>
+                            <p class="text-[10px] font-black text-slate-800 uppercase tracking-tight group-hover:text-accent transition-colors">${n.title}</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5 leading-relaxed font-medium">${n.body}</p>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function loadSection(id) {
+            if (!mainContentElement) return;
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            const activeLink = document.getElementById(`nav-${id}`);
+            if (activeLink) activeLink.classList.add('active'); 
+
+            Object.values(charts).forEach(c => c.destroy());
+            charts = {};
+            const content = getSectionContent(id);
+            mainContentElement.innerHTML = content.html;
+            if (content.initCharts) setTimeout(content.initCharts, 0);
+        }
+
+        function toggleMenu(id) {
+            const menu = document.getElementById(`menu-${id}`);
+            const arrow = document.getElementById(`arrow-${id}`);
+            menu.classList.toggle('hidden');
+            arrow.classList.toggle('rotate-180');
+        }
+		
+		function renderDetentionCard(da) {
+            const shortId = da.id.slice(-2);
+            return `
+                <div class="bg-white border border-slate-200 rounded-2xl p-6 flex items-center justify-between shadow-sm transition-all hover:border-slate-300">
+                    <div class="flex items-center gap-6">
+                        <div class="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center font-bold text-slate-600">${shortId}</div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h3 class="text-sm font-bold text-slate-800 uppercase tracking-tight">Vehicle NO. ${da.id}</h3>
+                                <span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md uppercase tracking-tighter">${da.fleet}</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500 mt-1">At <b>${da.location}</b> | Dwell: <span class="text-red-500 font-semibold">${da.dwell}</span></p>
+                            <p class="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wide">Shipper Charged: <b class="text-slate-600">${da.shipper}</b></p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-8">
+                        <div class="text-right">
+                            <p class="text-[10px] uppercase tracking-widest font-bold text-slate-400">Active Charge</p>
+                            <p class="text-lg font-extrabold text-blue-600">$${da.charge.toFixed(2)}</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <button onclick="alert('Viewing Manifest')" class="w-9 h-9 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 transition-colors">📄</button>
+                            <button onclick="alert('Invoice Sent')" class="bg-blue-600 text-white px-5 py-2 rounded-xl text-xs font-bold shadow hover:bg-blue-700 transition-all">Invoice</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // LOAD MANAGEMENT FUNCTIONS
+		function openVehicleDetailModal(vId) {
+            const v = reportData.vehicles.find(item => item.id === vId);
+            if (!v) return;
+            document.getElementById('modal-title').innerText = `Vehicle Detail: - ${v.id}`;
+            document.getElementById('m-model').innerText = `${v.make} ${v.model}`;
+            document.getElementById('m-vin').innerText = v.vin;
+            document.getElementById('m-driver').innerText = v.driver;
+            const healthEl = document.getElementById('m-health');
+            healthEl.innerText = v.engine.toUpperCase();
+            healthEl.className = `text-[10px] font-black px-2 py-1 rounded-lg ${v.engine === 'Critical' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`;
+            document.getElementById('m-inspection').innerText = v.inspection;
+            document.getElementById('m-inspection').className = v.inspection === 'Overdue' ? 'text-red-500 text-[11px] font-black' : 'text-slate-700 text-[11px] font-black';
+            document.getElementById('m-tire').innerText = v.tire;
+            document.getElementById('m-tire').className = v.tire === 'Immediate' ? 'text-red-500 text-[11px] font-black' : 'text-slate-700 text-[11px] font-black';
+
+            document.getElementById('vehicle-detail-modal').classList.remove('hidden');
+            setTimeout(() => {
+                const ctx = document.getElementById('fuelChart').getContext('2d');
+                if (charts.fuelDetail) charts.fuelDetail.destroy();
+                charts.fuelDetail = new Chart(ctx, {
+                    type: 'line',
+                    data: { labels: ['M1', 'M2', 'M3', 'M4', 'M5', 'M6'], datasets: [{ data: v.fuelHistory, borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2 }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { ticks: { font: { size: 9 } } } } }
+                });
+            }, 50);
+        }
+
+        function closeVehicleDetailModal() { document.getElementById('vehicle-detail-modal').classList.add('hidden'); }
+        function openCreateLoadModal() { document.getElementById('create-load-modal').classList.remove('hidden'); }
+        function closeCreateLoadModal() { document.getElementById('create-load-modal').classList.add('hidden'); }
+        function confirmLoadCreation() { alert('Assignment Confirmed. Load published to dispatch.'); closeCreateLoadModal(); }
+		
+		function openDetentionModal() {
+            const list = document.getElementById('detention-list');
+            list.innerHTML = reportData.detentionAlerts.map(da => renderDetentionCard(da)).join('');
+            document.getElementById('detention-modal').classList.remove('hidden');
+        }
+
+        function closeDetentionModal() { document.getElementById('detention-modal').classList.add('hidden'); }
+
+        function openAssignModal(loadId) {
+            const load = reportData.loads.find(l => l.id === loadId);
+            if (!load) return;
+            document.getElementById('modal-load-id').innerText = `LOAD ID: ${load.id}`;
+            document.getElementById('modal-route').innerText = `${load.origin} - ${load.destination}`;
+            document.getElementById('modal-rate').innerText = `${load.rate}.00`;
+            document.getElementById('assign-load-modal').classList.remove('hidden');
+        }
+        function closeAssignModal() { document.getElementById('assign-load-modal').classList.add('hidden'); }
+        function confirmAssignment() { alert('Assignment Confirmed'); closeAssignModal(); }
+
+        // RENDERERS
+        function renderLoadTable(data, limit = null) {
+            const displayData = limit ? data.slice(0, limit) : data;
+            return `
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left min-w-[900px]">
+                        <thead>
+                            <tr class="text-[9px] font-bold text-slate-400 uppercase tracking-[0.15em] border-b border-slate-50 bg-slate-50/10 px-8">
+                                <th class="px-8 py-4">Load ID / Route</th>
+                                <th class="px-8 py-4">Vehicle / Dist</th>
+                                <th class="px-8 py-4">Weight</th>
+                                <th class="px-8 py-4">Pay Rate</th>
+                                <th class="px-8 py-4 text-center">Status</th>
+                                <th class="px-8 py-4 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50">
+                            ${displayData.map(l => {
+                                const isAssigned = l.status === 'Assigned';
+                                return `
+                                <tr class="hover:bg-slate-50/50 transition-colors">
+                                    <td class="px-8 py-5">
+                                        <p class="font-bold text-xs text-slate-800 uppercase tracking-tighter">${l.id}</p>
+                                        <p class="text-[9px] text-slate-400 font-bold uppercase tracking-tight whitespace-nowrap">${l.origin} → ${l.destination}</p>
+                                    </td>
+                                    <td class="px-8 py-5">
+                                        <p class="text-xs font-bold text-slate-600 uppercase tracking-tighter">${l.type}</p>
+                                        <p class="text-[9px] text-slate-400 font-medium">${l.distance}</p>
+                                    </td>
+                                    <td class="px-8 py-5 text-xs font-bold text-slate-500">${l.weight}</td>
+                                    <td class="px-8 py-5 text-xs font-black text-accent">${l.rate}</td>
+                                    <td class="px-8 py-5 text-center"><span class="status-pill ${l.color}">${l.status}</span></td>
+                                    <td class="px-8 py-5 text-right flex items-center justify-end gap-2">
+                                        <button onclick="${!isAssigned ? `openAssignModal('${l.id}')` : ''}" class="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg transition-all ${isAssigned ? 'text-slate-300 bg-slate-50 cursor-not-allowed' : 'text-accent bg-blue-50 border border-blue-100 hover:bg-blue-100'}" ${isAssigned ? 'disabled' : ''}>Assign</button>
+                                        <button class="text-[10px] font-black text-slate-400 hover:text-slate-600 uppercase tracking-widest">View</button>
+                                    </td>
+                                </tr>`}).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+        }
+
+        function generateOverview() {
+            const primaryAlert = reportData.detentionAlerts[0];
+            return {
+                html: `
+                    <div class="fade-in max-w-7xl mx-auto">
+						<div class="mb-10">
+                            <h2 class="text-3xl font-black text-slate-800 tracking-tight">Welcome, John Doe</h2>
+                            <p class="text-[10px] text-slate-400 mt-1.5 uppercase tracking-[0.25em] font-bold">Operational Command Center</p>
+                        </div>
+                        <div class="mb-10"><h2 class="text-3xl font-black text-slate-800 tracking-tight">Executive Control</h2><p class="text-[10px] text-slate-400 mt-1.5 uppercase tracking-[0.25em] font-bold">Real-time Operational Status</p></div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                            <div class="p-6 rounded-2xl card-minimal flex flex-col justify-between h-32"><p class="kpi-label">Revenue</p><p class="kpi-main">$428.5k</p><p class="text-[9px] font-extrabold text-blue-600 uppercase tracking-wide">↑ 12.4% Optimal</p></div>
+                            <div class="p-6 rounded-2xl card-minimal flex flex-col justify-between h-32"><p class="kpi-label">Utilization</p><p class="kpi-main">84.2%</p><p class="text-[9px] font-extrabold text-slate-400 uppercase tracking-wide">Standard Target</p></div>
+                            <div class="p-5 rounded-2xl card-minimal flex flex-col justify-between h-32"><p class="kpi-label">Fuel Cost</p><p class="kpi-main">$3.82<span class="text-xs font-normal text-slate-400 ml-1">/gal</span></p><p class="text-[9px] font-extrabold text-red-400 uppercase tracking-wide">Market Volatile</p></div>
+                            <div class="p-6 rounded-2xl card-minimal flex flex-col justify-between h-32"><p class="kpi-label">Safety</p><p class="kpi-main">91.8</p><p class="text-[9px] font-extrabold text-green-600 uppercase tracking-wide">Compliant</p></div>
+                        </div>
+                        <!-- Active Detention Section -->
+                        <div class="mb-10 group">
+                            <div class="flex justify-between items-center mb-4 px-1">
+                                <h3 class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Active Detention Vehicle</h3>
+                                <a href="javascript:void(0)" onclick="openDetentionModal()" class="text-[10px] font-black text-accent opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-widest hover:underline">View All Directory →</a>
+                            </div>
+                            ${renderDetentionCard(primaryAlert)}
+                        </div>
+                        <div class="bg-surface rounded-2xl border border-slate-100 overflow-hidden mb-10 shadow-sm">
+                            <div class="px-8 py-5 border-b border-slate-50 bg-slate-50/20 flex justify-between items-center"><h3 class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Load Marketplace Preview</h3><a href="javascript:void(0)" onclick="loadSection('load-tracking')" class="text-[9px] text-accent font-black uppercase tracking-widest hover:underline">View All Loads →</a></div>
+                            ${renderLoadTable(reportData.loads, 3)}
+                        </div>
+						<!-- REQUESTED: VEHICLE STATUS TABLE -->
+                        <div class="bg-surface rounded-2xl border border-slate-100 overflow-hidden mb-10 shadow-sm">
+                            <div class="px-8 py-5 border-b border-slate-50 bg-slate-50/20 flex justify-between items-center"><h3 class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Vehicle Status Directory</h3><a href="javascript:void(0)" class="text-[9px] text-accent font-black uppercase tracking-widest hover:underline">Manage Assets</a></div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left min-w-[900px]">
+                                    <thead>
+                                        <tr class="text-[9px] font-bold text-slate-400 uppercase tracking-[0.15em] border-b border-slate-50 bg-slate-50/10 px-8">
+                                            <th class="px-8 py-4">Vehicle ID</th><th class="px-8 py-4">Driver</th><th class="px-8 py-4">Location</th><th class="px-8 py-4 text-center">Status</th><th class="px-8 py-4 text-center">Maintenance Need</th><th class="px-8 py-4 text-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-50">
+                                        ${reportData.vehicles.map(v => `
+                                            <tr class="hover:bg-slate-50/50 transition-colors group">
+                                                <td class="px-8 py-5 text-xs font-black text-slate-800 uppercase tracking-tighter">NO. ${v.id}</td>
+                                                <td class="px-8 py-5 text-xs text-slate-600 font-medium">${v.driver}</td>
+                                                <td class="px-8 py-5 text-[10px] font-medium text-slate-500">${v.location}</td>
+                                                <td class="px-8 py-5 text-center"><span class="status-pill ${v.color}">${v.status}</span></td>
+                                                <td class="px-8 py-5 text-center"><span class="text-[10px] font-bold ${v.maintNeed === 'Critical' ? 'text-red-500' : 'text-slate-400'}">${v.maintNeed}</span></td>
+                                                <td class="px-8 py-5 text-right"><button onclick="openVehicleDetailModal('${v.id}')" class="bg-blue-50 text-accent px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-accent hover:text-white transition-all">View Detail</button></td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>`
+            };
+        }
+
+        function generateLoadTracking() {
+            const counts = reportData.loads.reduce((acc, curr) => { acc[curr.status] = (acc[curr.status] || 0) + 1; return acc; }, {});
+            return {
+                html: `
+                    <div class="fade-in max-w-7xl mx-auto">
+                        <div class="mb-8 flex justify-between items-center">
+                            <div><h2 class="text-3xl font-black text-slate-800 tracking-tight">Load Tracking & Marketplace</h2><p class="text-[10px] text-slate-400 mt-1.5 uppercase tracking-[0.25em] font-bold">Central Capacity Matching</p></div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                            <div class="flex flex-col gap-1.5"><label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest px-1">Origin Hub</label><input type="text" placeholder="City or PIN" class="bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 text-xs font-medium focus:bg-white focus:ring-1 focus:ring-blue-100"></div>
+                            <div class="flex flex-col gap-1.5"><label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest px-1">Destination</label><input type="text" placeholder="City or PIN" class="bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 text-xs font-medium focus:bg-white focus:ring-1 focus:ring-blue-100"></div>
+                            <div class="flex flex-col gap-1.5"><label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest px-1">Truck Type</label><select class="minimal-select bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-600"><option>All Types</option><option>Reefer</option><option>Dry Van</option></select></div>
+                            <div class="flex flex-col gap-1.5"><label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest px-1">Current Status</label><select class="minimal-select bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-600"><option>All Status (${reportData.loads.length})</option><option>Available (${counts['Available'] || 0})</option><option>Urgent (${counts['Urgent'] || 0})</option><option>Assigned (${counts['Assigned'] || 0})</option></select></div>
+                        </div>
+                        <div class="bg-surface rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
+                            <div class="px-8 py-5 border-b border-slate-50 bg-slate-50/20 flex justify-between items-center"><h3 class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Active Load Directory</h3><button onclick="openCreateLoadModal()" class="bg-accent text-white px-5 py-1.5 rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-md hover:bg-blue-700 transition-all">Create New Load +</button></div>
+                            ${renderLoadTable(reportData.loads)}
+                        </div>
+                    </div>`
+            };
+        }
+
+        function getSectionContent(id) {
+            if (id === 'overview') return generateOverview();
+            if (id === 'load-tracking') return generateLoadTracking();
+            return { html: `<div class="p-20 text-center"><p class="text-slate-400 font-bold uppercase tracking-widest text-[9px]">Module: ${id} Loading...</p></div>` };
+        }
+
+        function openAddVehicleModal() { document.getElementById('add-vehicle-modal').classList.remove('hidden'); }
+        function closeAddVehicleModal() { document.getElementById('add-vehicle-modal').classList.add('hidden'); }
+        function openDetentionModal() { 
+            const list = document.getElementById('detention-list');
+            list.innerHTML = reportData.detentionAlerts.map(da => `<div class="bg-slate-50 p-4 rounded-xl border border-slate-100 flex justify-between items-center"><div><p class="text-xs font-bold text-slate-800 uppercase">Vehicle NO. ${da.id}</p><p class="text-[10px] text-slate-400">${da.location}</p></div><p class="text-xs font-black text-accent">$${da.charge.toFixed(2)}</p></div>`).join('');
+            document.getElementById('detention-modal').classList.remove('hidden'); 
+        }
+        function closeDetentionModal() { document.getElementById('detention-modal').classList.add('hidden'); }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
